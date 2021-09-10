@@ -1,9 +1,6 @@
 import {
   ApiKeySourceType,
-  IResource,
   LambdaIntegration,
-  MockIntegration,
-  PassthroughBehavior,
   RestApi,
 } from "@aws-cdk/aws-apigateway";
 import { Effect, PolicyStatement } from "@aws-cdk/aws-iam";
@@ -56,44 +53,6 @@ const functions = (scope: cdk.Construct, resources: string[], api: RestApi) => {
   });
 };
 
-export function addCorsOptions(apiResource: IResource, allowedOrigin: string) {
-  apiResource.addMethod(
-    "OPTIONS",
-    new MockIntegration({
-      integrationResponses: [
-        {
-          statusCode: "200",
-          responseParameters: {
-            "method.response.header.Access-Control-Allow-Headers":
-              "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Amz-User-Agent'",
-            "method.response.header.Access-Control-Allow-Origin": `'${allowedOrigin}'`,
-            "method.response.header.Access-Control-Allow-Credentials":
-              "'false'",
-            "method.response.header.Access-Control-Allow-Methods":
-              "'OPTIONS,GET,PUT,POST,DELETE'",
-          },
-        },
-      ],
-      passthroughBehavior: PassthroughBehavior.NEVER,
-      requestTemplates: {
-        "application/json": '{"statusCode": 200}',
-      },
-    }),
-    {
-      methodResponses: [
-        {
-          statusCode: "200",
-          responseParameters: {
-            "method.response.header.Access-Control-Allow-Headers": true,
-            "method.response.header.Access-Control-Allow-Methods": true,
-            "method.response.header.Access-Control-Allow-Credentials": true,
-            "method.response.header.Access-Control-Allow-Origin": true,
-          },
-        },
-      ],
-    }
-  );
-}
 const code = (dirname: string) => {
   return Code.fromAsset(
     resolve(`${__dirname}/../`, "lib", "functions", dirname, "bin", "main.zip")

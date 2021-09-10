@@ -19,4 +19,4 @@ build:
 	  echo  "building finished. $${module_dir}";\
 	done
 deploy:
-	cdk deploy --require-approval never
+	cdk deploy --all --require-approval never
