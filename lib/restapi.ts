@@ -11,7 +11,6 @@ import { resolve } from "path";
 export class RestApiStack extends cdk.Stack {
   constructor(scope: cdk.Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
-    // ApiGateway
     const api = new RestApi(this, "RestApi", {
       restApiName: "claime-api",
       apiKeySourceType: ApiKeySourceType.HEADER,
@@ -26,7 +25,7 @@ export class RestApiStack extends cdk.Stack {
       .addApiStage({
         stage: api.deploymentStage,
       });
-    functions(this, ["subscribe"], api);
+    functions(this, ["subscribe", "unsubscribe"], api);
   }
 }
 
