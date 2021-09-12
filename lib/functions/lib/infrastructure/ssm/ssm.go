@@ -20,7 +20,10 @@ type (
 )
 
 const (
-	infuraKeyPrefix = "notisce-infura-key-"
+	keyPrefix             = "notisce-"
+	infuraKeyPrefix       = keyPrefix + "infura-key-"
+	slackTokenKey         = keyPrefix + "slack-token"
+	slackSigningSecretKey = keyPrefix + "slack-signingsecret"
 )
 
 func keyOf(network string) string {
@@ -29,18 +32,24 @@ func keyOf(network string) string {
 
 // New New client
 func New() Client {
-	sess, _ := session.NewSessionWithOptions(session.Options{
-		Config:  aws.Config{Region: aws.String("us-east-1")},
-		Profile: "default",
-	})
 	return Client{
-		svc: ssm.New(sess),
+		svc: ssm.New(session.New()),
 	}
 }
 
 // WsEndpoint get ws endpoint
 func (c Client) WsEndpoint(ctx context.Context, network string) (val string, err error) {
 	return c.get(ctx, keyOf(network))
+}
+
+// SlackToken get slack token
+func (c Client) SlackToken(ctx context.Context) (val string, err error) {
+	return c.get(ctx, slackTokenKey)
+}
+
+// SlackSigningSecret get signing secret
+func (c Client) SlackSigningSecret(ctx context.Context) (val string, err error) {
+	return c.get(ctx, slackSigningSecretKey)
 }
 
 // Get get parameter

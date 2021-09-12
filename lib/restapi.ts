@@ -12,28 +12,24 @@ export class RestApiStack extends cdk.Stack {
   constructor(scope: cdk.Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
     const api = new RestApi(this, "RestApi", {
-      restApiName: "claime-api",
+      restApiName: "notisce-api",
       apiKeySourceType: ApiKeySourceType.HEADER,
     });
-    const apiKey = api.addApiKey("APIKey", {
-      apiKeyName: "claime",
-    });
-    api
-      .addUsagePlan("UsagePlanForAPIKey", {
-        apiKey: apiKey,
-      })
-      .addApiStage({
-        stage: api.deploymentStage,
-      });
-    functions(this, ["subscribe", "unsubscribe"], api);
+    functions(this, this.region, this.account, ["subscribe"], api);
   }
 }
 
-const functions = (scope: cdk.Construct, resources: string[], api: RestApi) => {
+const functions = (
+  scope: cdk.Construct,
+  region: string,
+  account: string,
+  resources: string[],
+  api: RestApi
+) => {
   return resources.map((r) => {
     const resource = api.root.addResource(r);
     const func = new Function(scope, r, {
-      functionName: r,
+      functionName: `notisce-${r}`,
       code: code(r),
       handler: "bin/main",
       timeout: cdk.Duration.minutes(1),
@@ -47,7 +43,29 @@ const functions = (scope: cdk.Construct, resources: string[], api: RestApi) => {
         resources: ["*"],
       })
     );
-    resource.addMethod("PUT", new LambdaIntegration(func));
+    func.addToRolePolicy(
+      new PolicyStatement({
+        effect: Effect.ALLOW,
+        actions: ["ssm:Get*"],
+        resources: [`arn:aws:ssm:${region}:${account}:parameter/notisce*`],
+      })
+    );
+    func.addToRolePolicy(
+      new PolicyStatement({
+        effect: Effect.ALLOW,
+        actions: [
+          "dynamodb:Put*",
+          "dynamodb:Get*",
+          "dynamodb:Scan*",
+          "dynamodb:Delete*",
+          "dynamodb:Batch*",
+        ],
+        resources: [
+          `arn:aws:dynamodb:${region}:${account}:table/notisce-main*`,
+        ],
+      })
+    );
+    resource.addMethod("POST", new LambdaIntegration(func));
     return resource;
   });
 };

@@ -10,7 +10,18 @@ export class DatasourceStack extends cdk.Stack {
   constructor(scope: cdk.Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
     const tablename = "notisce-main";
-    new Table(this, "notisce-table", ddbProps(tablename));
+    const table = new Table(this, "notisce-table", ddbProps(tablename));
+    table.addGlobalSecondaryIndex({
+      indexName: "GSI-1",
+      partitionKey: {
+        name: "PK",
+        type: AttributeType.STRING,
+      },
+      sortKey: {
+        name: "Timestamp",
+        type: AttributeType.STRING,
+      },
+    });
   }
 }
 

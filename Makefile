@@ -20,3 +20,5 @@ build:
 	done
 deploy:
 	cdk deploy --all --require-approval never
+up:
+	aws lambda update-function-code --function-name notisce-subscribe --zip-file fileb://lib/functions/subscribe/bin/main.zip --publish

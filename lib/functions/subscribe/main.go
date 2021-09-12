@@ -1,105 +1,71 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
-	"io/ioutil"
-	"net/http"
-	"notisce/lib/functions/lib/common/log"
+	"notisce/lib/functions/lib"
+	slackclient "notisce/lib/functions/lib/infrastructure/slack"
 	"notisce/lib/functions/lib/infrastructure/ssm"
-	"strconv"
 
-	"github.com/ethereum/go-ethereum"
-	"github.com/ethereum/go-ethereum/accounts/abi"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/ethclient"
+	"notisce/lib/functions/lib/subscribe"
+	repository "notisce/lib/functions/lib/subscribe/persistence"
+
+	"github.com/aws/aws-lambda-go/events"
+	"github.com/aws/aws-lambda-go/lambda"
 )
 
+const (
+	requiredArgs = 3
+)
+
+func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
+
+	ps, err := lib.NewParameterStore(ctx)
+	if err != nil {
+		return unexpectedError(request, err)
+	}
+	s, err := lib.Slackcli(ctx, ps)
+	if err != nil {
+		return unexpectedError(request, err)
+	}
+	if err = s.Verify(request); err != nil {
+		return unexpectedError(request, err)
+	}
+	app := newApp(ctx, s)
+	res, err := app.Process(ctx, request.Body)
+	if err != nil {
+		return errorResponse(request, res)
+	}
+	resJSON, _ := json.Marshal(&res)
+	return events.APIGatewayProxyResponse{
+		StatusCode: 200,
+		Headers:    lib.Headers(request),
+		Body:       string(resJSON),
+	}, nil
+}
+
+func unexpectedError(request events.APIGatewayProxyRequest, err error) (events.APIGatewayProxyResponse, error) {
+	return events.APIGatewayProxyResponse{
+		StatusCode: 500,
+	}, err
+}
+
+func errorResponse(request events.APIGatewayProxyRequest, output subscribe.Output) (events.APIGatewayProxyResponse, error) {
+	out, err := output.Parse()
+	if err != nil {
+		return events.APIGatewayProxyResponse{}, err
+	}
+	return events.APIGatewayProxyResponse{
+		StatusCode: 200,
+		Headers:    lib.Headers(request),
+		Body:       string(out),
+	}, nil
+}
+
 func main() {
-	endpoint, err := ssm.New().WsEndpoint(context.Background(), "rinkeby")
-	if err != nil {
-		log.Error("rinkeby not supported", err)
-		return
-	}
-	client, err := ethclient.Dial(endpoint)
-	if err != nil {
-		log.Error("rinkeby not supported", err)
-		return
-	}
-	contractAbi, err := toAbiFromGithubURL("https://raw.githubusercontent.com/bridges-inc/kaleido-core/develop/deployments/rinkeby/AdManager.json")
-
-	contractAddress := common.HexToAddress("0xaE2b9f801963891fC1eD72F655De266A7ae34FE8")
-	query := ethereum.FilterQuery{
-		Addresses: []common.Address{contractAddress},
-	}
-
-	logs := make(chan types.Log)
-	sub, err := client.SubscribeFilterLogs(context.Background(), query, logs)
-	if err != nil {
-		log.Error("cant subscribe events", err)
-	}
-
-	for {
-		select {
-		case err := <-sub.Err():
-			log.Error("unexpected error occured: ", err)
-		case vLog := <-logs:
-			fmt.Println("blockNumber:" + strconv.Itoa(int(vLog.BlockNumber)))
-			var mp map[string]interface{} = map[string]interface{}{}
-			contractAbi.UnpackIntoMap(mp, "Book", vLog.Data)
-			fmt.Println("contractAddress:", vLog.Address.String())
-			fmt.Println("eventName:", "Book")
-			fmt.Println("txHash:" + vLog.TxHash.String())
-			for k, v := range mp {
-				fmt.Println("key:" + k + ", value:" + fmt.Sprintf("%v", v))
-			}
-		}
-	}
+	lambda.Start(handler)
 }
 
-func toAbiFromGithubURL(url string) (abi.ABI, error) {
-	abiJSON, err := downloadAbiFromGithub(url)
-	if err != nil {
-		fmt.Print(err.Error())
-		return abi.ABI{}, err
-	}
-	return toAbiFromJSON(abiJSON)
-}
-
-func toAbiFromJSON(js []byte) (abi.ABI, error) {
-	maybeAbiRecord, err := abi.JSON(bytes.NewReader(js))
-	if err == nil {
-		return maybeAbiRecord, nil
-	}
-
-	m := make(map[string]interface{})
-	if err = json.Unmarshal(js, &m); err != nil {
-		fmt.Println("abi from json failed")
-		return abi.ABI{}, err
-	}
-	abiRecord := m["abi"]
-	b, err := json.Marshal(&abiRecord)
-	if err != nil {
-		fmt.Println("abi from json failed")
-		return abi.ABI{}, err
-	}
-	fromAbiRecord, err := abi.JSON(bytes.NewReader(b))
-	if err != nil {
-		fmt.Println("abi from json failed")
-		return abi.ABI{}, err
-	}
-	return fromAbiRecord, err
-}
-
-func downloadAbiFromGithub(url string) ([]byte, error) {
-	resp, err := http.Get(url)
-	if err != nil {
-		log.Error("get abi failed", err)
-		return []byte{}, err
-	}
-	defer resp.Body.Close()
-	return ioutil.ReadAll(resp.Body)
+func newApp(ctx context.Context, slcli slackclient.Client) subscribe.Service {
+	return subscribe.New(ssm.New(), slcli, repository.New())
 }
