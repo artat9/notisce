@@ -15,7 +15,7 @@ export class RestApiStack extends cdk.Stack {
       restApiName: "notisce-api",
       apiKeySourceType: ApiKeySourceType.HEADER,
     });
-    functions(this, this.region, this.account, ["subscribe"], api);
+    functions(this, this.region, this.account, ["startsubscription"], api);
   }
 }
 
@@ -36,38 +36,33 @@ const functions = (
       runtime: Runtime.GO_1_X,
       tracing: Tracing.ACTIVE,
     });
-    func.addToRolePolicy(
-      new PolicyStatement({
-        effect: Effect.ALLOW,
-        actions: ["lambda:*"],
-        resources: ["*"],
-      })
-    );
-    func.addToRolePolicy(
-      new PolicyStatement({
-        effect: Effect.ALLOW,
-        actions: ["ssm:Get*"],
-        resources: [`arn:aws:ssm:${region}:${account}:parameter/notisce*`],
-      })
-    );
-    func.addToRolePolicy(
-      new PolicyStatement({
-        effect: Effect.ALLOW,
-        actions: [
-          "dynamodb:Put*",
-          "dynamodb:Get*",
-          "dynamodb:Scan*",
-          "dynamodb:Delete*",
-          "dynamodb:Batch*",
-        ],
-        resources: [
-          `arn:aws:dynamodb:${region}:${account}:table/notisce-main*`,
-        ],
-      })
+    basicPolicytStatements(region, account).forEach((s) =>
+      func.addToRolePolicy(s)
     );
     resource.addMethod("POST", new LambdaIntegration(func));
     return resource;
   });
+};
+
+export const basicPolicytStatements = (region: string, account: string) => {
+  return [
+    new PolicyStatement({
+      effect: Effect.ALLOW,
+      actions: [
+        "dynamodb:Put*",
+        "dynamodb:Get*",
+        "dynamodb:Scan*",
+        "dynamodb:Delete*",
+        "dynamodb:Batch*",
+      ],
+      resources: [`arn:aws:dynamodb:${region}:${account}:table/notisce-main*`],
+    }),
+    new PolicyStatement({
+      effect: Effect.ALLOW,
+      actions: ["ssm:Get*"],
+      resources: [`arn:aws:ssm:${region}:${account}:parameter/notisce*`],
+    }),
+  ];
 };
 
 const code = (dirname: string) => {

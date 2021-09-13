@@ -3,3 +3,7 @@ node_modules
 cdk.out/
 *.zip
 lib/functions/**/bin/*
+*.js
+*.d.ts
+dist/
+imports/
