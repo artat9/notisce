@@ -186,7 +186,7 @@
     constructs "^3.3.69"
     minimatch "^3.0.4"
 
-"@aws-cdk/aws-ecr@1.122.0":
+"@aws-cdk/aws-ecr@1.122.0", "@aws-cdk/aws-ecr@^1.122.0":
   version "1.122.0"
   resolved "https://registry.yarnpkg.com/@aws-cdk/aws-ecr/-/aws-ecr-1.122.0.tgz#a86a52e32d74cd48dc96f7b7613b7151213ea8e6"
   integrity sha512-FxM7Q/6VHquOdfWrKQArzs/91fxvZFwT/FkPIrEm+X10/voOFI6S6xRXaOlr2UVn6dji6J6DssY7YBvJq1ciOQ==
@@ -455,7 +455,7 @@
     ignore "^5.1.8"
     minimatch "^3.0.4"
 
-"@aws-cdk/custom-resources@1.122.0":
+"@aws-cdk/custom-resources@1.122.0", "@aws-cdk/custom-resources@^1.122.0":
   version "1.122.0"
   resolved "https://registry.yarnpkg.com/@aws-cdk/custom-resources/-/custom-resources-1.122.0.tgz#e4554dc9b4e3917a4f935ff3884d6bd1ccbca9ed"
   integrity sha512-vdipr6cpCIYl0lokS0HQI3kY34mqpxns82+MzqYc95xZ7HPYOjnP0aKqL+UKIpaQsTVVUkOqfxZ9cXNdv04Xag==
@@ -1612,6 +1612,11 @@ braces@^3.0.1:
   dependencies:
     fill-range "^7.0.1"
 
+brototype@^0.0.6:
+  version "0.0.6"
+  resolved "https://registry.yarnpkg.com/brototype/-/brototype-0.0.6.tgz#9b3f07364783397b8f1c4bee7a141993566e4b44"
+  integrity sha1-mz8HNkeDOXuPHEvuehQZk1ZuS0Q=
+
 browser-process-hrtime@^1.0.0:
   version "1.0.0"
   resolved "https://registry.yarnpkg.com/browser-process-hrtime/-/browser-process-hrtime-1.0.0.tgz#3c9b4b7d782c8121e56f10106d84c0d0ffc94626"
@@ -1711,6 +1716,16 @@ cdk-assets@1.122.0:
     glob "^7.1.7"
     mime "^2.5.2"
     yargs "^16.2.0"
+
+cdk8s-config@^0.0.9:
+  version "0.0.9"
+  resolved "https://registry.yarnpkg.com/cdk8s-config/-/cdk8s-config-0.0.9.tgz#795581924598c173cc9fe577fc9affe880f9b20d"
+  integrity sha512-vGflyg+KZCTjZCEAbN/43UHBfIVCz3Xo13gaQnmg/7vdzSdPhky8YBtm66Kns2FLd9JpCose9+ZLf6WukMSvKw==
+  dependencies:
+    brototype "^0.0.6"
+    deepmerge "^4.2.2"
+    dotenv "^8.2.0"
+    js-yaml "^3.13.1"
 
 cdk8s@^1.0.0-beta.46:
   version "1.0.0-beta.46"
@@ -2033,6 +2048,11 @@ domexception@^2.0.1:
   integrity sha512-yxJ2mFy/sibVQlu5qHjOkf9J3K6zgmCxgJ94u2EdvDOV09H+32LtRswEcUsmUWN72pVLOEnTSRaIVVzVQgS0dg==
   dependencies:
     webidl-conversions "^5.0.0"
+
+dotenv@^8.2.0:
+  version "8.6.0"
+  resolved "https://registry.yarnpkg.com/dotenv/-/dotenv-8.6.0.tgz#061af664d19f7f4d8fc6e4ff9b584ce237adcb8b"
+  integrity sha512-IrPdXQsk2BbzvCBGBOTmmSH5SodmqZNt4ERAZDmW4CT+tL8VtvinqywuANaFu4bOMWki16nqf0e4oC0QIaDr/g==
 
 dreamopt@~0.6.0:
   version "0.6.0"

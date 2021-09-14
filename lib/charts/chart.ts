@@ -5,8 +5,8 @@ import { IntOrString, KubeDeployment, KubeService } from "../../imports/k8s";
 export class NotisceChart extends Chart {
   constructor(scope: Construct, id: string) {
     super(scope, id);
-
-    const selector = { app: "hello-kubernetes" };
+    const app = "notisce";
+    const selector = { app: app };
 
     new KubeService(this, "service", {
       spec: {
@@ -29,7 +29,7 @@ export class NotisceChart extends Chart {
             containers: [
               {
                 name: "app",
-                image: "paulbouwer/hello-kubernetes:1.7",
+                image: `atatur9/${app}:latest`,
                 ports: [{ containerPort: 8080 }],
               },
             ],

@@ -1,5 +1,7 @@
 .PHONY: setup build deploy
 TARGET = dev
+HELM_EXPERIMENTAL_OCI=1
+AWS_ACCOUNT=`aws sts get-caller-identity|jq .Account -r -c`
 
 setup:
 	export GO111MODULE=on
@@ -22,3 +24,12 @@ deploy:
 	cdk deploy --all --require-approval never
 up:
 	aws lambda update-function-code --function-name notisce-subscribe --zip-file fileb://lib/functions/subscribe/bin/main.zip --publish
+ecr:
+	aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin `aws sts get-caller-identity|jq .Account -r -c`.dkr.ecr.us-east-1.amazonaws.com
+build-container:
+	docker build -t notisce-subscriber .
+push-container:
+	docker tag notisce-subscriber atatur9/notisce:latest
+	docker push atatur9/notisce:latest
+helm-pull:
+	helm chart pull ${AWS_ACCOUNT}.dkr.ecr.us-east-1.amazonaws.com/notisce:latest

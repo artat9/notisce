@@ -7,3 +7,4 @@ lib/functions/**/bin/*
 *.d.ts
 dist/
 imports/
+cdk8sconfig.yaml
