@@ -2,27 +2,57 @@ package subscribe
 
 import (
 	"context"
-	"errors"
-	abiresolver "notisce/lib/functions/lib/infrastructure/abi"
-	"strings"
+	"notisce/lib/functions/lib/common/log"
+	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/ethclient"
+)
+
+const (
+	rinkebyScanBaseURL = "https://rinkeby.etherscan.io/address/"
 )
 
 type (
-	// Service service
-	Service struct {
-		resolver   EndpointResolver
-		messenger  Messenger
+
+	// Subscriber subscriber
+	Subscriber struct {
+		endpoint   wsEndpoint
 		repository Repository
+		resolver   AbiResolver
+		sender     MsgSender
+	}
+
+	Event struct {
+		BlockNumber     uint64
+		EventName       string
+		ContractAddress string
+		TxHash          string
+		Parameters      map[string]interface{}
+	}
+
+	// MsgSender sender
+	MsgSender interface {
+		Send(ctx context.Context, event Event, subscription Subscription) error
+	}
+
+	wsEndpoint struct {
+		rinkeby string
 	}
 
 	// Repository repository
 	Repository interface {
-		Subscribe(ctx context.Context, sub Subscription) error
-		UnSubscribe(ctx context.Context, in Input) error
+		Subscribing(ctx context.Context) ([]Subscription, error)
+		SubscribingFrom(ctx context.Context, t time.Time) ([]Subscription, error)
+	}
+
+	// AbiResolver abi resolver
+	AbiResolver interface {
+		Resolve(ctx context.Context, url string) (abi.ABI, error)
 	}
 
 	// EndpointResolver resolver
@@ -30,56 +60,39 @@ type (
 		WsEndpoint(ctx context.Context, network string) (val string, err error)
 	}
 
-	// Messenger messenger application
-	Messenger interface {
-		ToInputFromBody(body string) (Input, error)
-		ErrorOutput(err error) Output
-		ToOutput(in Input) Output
-	}
-
-	// Input input
-	Input struct {
-		Type       string
-		Address    string
-		Event      string
-		Network    string
-		AbiURL     string
-		WebhookURL string
-	}
-
 	// Subscription subscription
 	Subscription struct {
 		Address    string    `dynamo:"PK"`
-		Event      string    `dynamo:"SK"`
-		Timestamp  time.Time `dynamo:"Timesamp"`
+		EventName  string    `dynamo:"SK"`
+		Event      abi.Event `dynamo:"Event"`
+		Timestamp  time.Time `dynamo:"Timestamp"`
 		Network    string    `dynamo:"Network"`
 		WebhookURL string    `dynamo:"WebhookUrl"`
-		Abi        abi.ABI
-	}
-
-	// Output output
-	Output interface {
-		Parse() ([]byte, error)
+		Abi        abi.ABI   `dynamo:"Abi"`
+		ChannelID  string    `dynamo:"ChannelId"`
 	}
 )
 
-const (
-	// Subscribe subscribe
-	Subscribe = "subscribe"
-	// Unsubscribe unsubscribe
-	Unsubscribe = "unsubscribe"
-	// NetworkRinkeby rinkeby
-	NetworkRinkeby     = "rinkeby"
-	rinkebyScanBaseURL = "https://rinkeby.etherscan.io/address/"
-)
-
-// New New Service
-func New(resolver EndpointResolver, messenger Messenger, repository Repository) Service {
-	return Service{
-		resolver:   resolver,
-		messenger:  messenger,
+// NewSubscriber new subscriber
+func NewSubscriber(ctx context.Context, resolver EndpointResolver, sender MsgSender, repository Repository) (Subscriber, error) {
+	rinkeby, err := resolver.WsEndpoint(ctx, NetworkRinkeby)
+	if err != nil {
+		log.Error("cannot resolve endpoint rinkeby", err)
+	}
+	return Subscriber{
+		endpoint: wsEndpoint{
+			rinkeby: rinkeby,
+		},
 		repository: repository,
-	}
+		sender:     sender,
+	}, err
+}
+
+func resolveEndpoint(ctx context.Context, resolver EndpointResolver) (wsEndpoint, error) {
+	rinkeby, err := resolver.WsEndpoint(ctx, NetworkRinkeby)
+	return wsEndpoint{
+		rinkeby: rinkeby,
+	}, err
 }
 
 // ScanURLByNetwork scan url
@@ -89,90 +102,84 @@ func ScanURLByNetwork(network, address string) string {
 	}
 	return ""
 }
-
-var (
-	// AllowedTypes allowed Types for subscription.
-	AllowedTypes = []string{Subscribe, Unsubscribe}
-	// SupportedNetworks supported networks
-	SupportedNetworks = []string{NetworkRinkeby}
-)
-
-// validType is type valid
-func validType(val string) bool {
-	return valid(val, AllowedTypes)
-}
-
-func valid(val string, supported []string) bool {
-	for _, s := range supported {
-		if val == s {
-			return true
-		}
-	}
-	return false
-}
-
-// validNetwork is network supported
-func validNetwork(val string) bool {
-	return valid(val, SupportedNetworks)
-}
-
-// Process process request
-func (s Service) Process(ctx context.Context, requestbody string) (Output, error) {
-	input, err := s.messenger.ToInputFromBody(requestbody)
+func newSubscription(input Input, contract abi.ABI) (Subscription, error) {
+	ev, err := toEvent(input.Event, contract)
 	if err != nil {
-		return s.messenger.ErrorOutput(err), err
+		return Subscription{}, err
 	}
-	if err := input.validate(); err != nil {
-		return s.messenger.ErrorOutput(err), nil
-	}
-	if input.Type == Subscribe {
-		return s.subscribe(ctx, input)
-	}
-	return s.messenger.ErrorOutput(nil), err
-}
-
-func (s Service) subscribe(ctx context.Context, input Input) (Output, error) {
-	abi, err := abiresolver.Resolver{}.Resolve(ctx, input.AbiURL)
-	if err != nil {
-		return s.messenger.ErrorOutput(err), err
-	}
-	if err := s.repository.Subscribe(ctx, newSubscription(input, abi)); err != nil {
-		return s.messenger.ErrorOutput(err), err
-	}
-	return s.messenger.ToOutput(input), nil
-}
-
-func newSubscription(input Input, contract abi.ABI) Subscription {
 	return Subscription{
 		Address:    input.Address,
-		Event:      input.Event,
+		EventName:  input.Event,
+		Event:      ev,
 		Network:    input.Network,
 		Abi:        contract,
 		Timestamp:  time.Now(),
 		WebhookURL: input.WebhookURL,
-	}
+		ChannelID:  input.ChannelID,
+	}, nil
 }
 
-func (s Service) unbscribe(ctx context.Context, input Input) (string, error) {
-	return "", nil
-}
-
-func (input Input) validate() error {
-	if !validType(input.Type) {
-		return errors.New("Subscription type is invalid. Allowed values:" + strings.Join(AllowedTypes, ", ") + ". Got:" + input.Type)
+// StartSubscription start subscription
+func (s Subscriber) StartSubscription(ctx context.Context) error {
+	subs, err := s.loadAllSubscriptions(ctx)
+	if err != nil {
+		return err
 	}
-	if !validNetwork(input.Network) {
-		return errors.New("Not supported network. Allowed values:" + strings.Join(SupportedNetworks, ", ") + ". Got:" + input.Network)
-	}
-	if input.Address == "" {
-		return missingRequiredFieldError("Address")
-	}
-	if !common.IsHexAddress(input.Address) {
-		return errors.New("Contract address " + input.Address + " is not hex address. Example:" + "0xaE2b9f801963891fC1eD72F655De266A7ae34FE8.")
-	}
+	s.startSubscriptions(ctx, subs)
 	return nil
 }
 
-func missingRequiredFieldError(field string) error {
-	return errors.New("Missing required field:" + field)
+func (s Subscriber) startSubscriptions(ctx context.Context, subs []Subscription) {
+	var wg sync.WaitGroup
+	for i := 0; i < len(subs); i++ {
+		wg.Add(1)
+		sub := subs[i]
+		log.Info("start subscription event " + sub.Event.RawName + " of " + sub.Address)
+		go s.startSubscriptionOf(ctx, sub)
+	}
+	wg.Wait()
+}
+
+func (s Subscriber) startSubscriptionOf(ctx context.Context, subscription Subscription) error {
+	client, err := ethclient.Dial(s.endpoint.rinkeby)
+	if err != nil {
+		log.Error("rinkeby not supported", err)
+		return err
+	}
+	address := common.HexToAddress(subscription.Address)
+	query := ethereum.FilterQuery{
+		Addresses: []common.Address{address},
+		Topics:    [][]common.Hash{{subscription.Event.ID}},
+	}
+	logs := make(chan types.Log)
+	sub, err := client.SubscribeFilterLogs(context.Background(), query, logs)
+	if err != nil {
+		log.Error("cant subscribe events", err)
+	}
+	for {
+		select {
+		case err := <-sub.Err():
+			log.Error("unexpected error occured: ", err)
+		case vLog := <-logs:
+			if err := s.sender.Send(ctx, newEvent(vLog, subscription), subscription); err != nil {
+				log.Error("msg send failed:", err)
+			}
+		}
+	}
+}
+
+func newEvent(vLog types.Log, subscription Subscription) Event {
+	var mp map[string]interface{} = map[string]interface{}{}
+	subscription.Abi.UnpackIntoMap(mp, subscription.Event.RawName, vLog.Data)
+	return Event{
+		BlockNumber:     vLog.BlockNumber,
+		ContractAddress: vLog.Address.String(),
+		EventName:       subscription.EventName,
+		TxHash:          vLog.TxHash.String(),
+		Parameters:      mp,
+	}
+}
+
+func (s Subscriber) loadAllSubscriptions(ctx context.Context) ([]Subscription, error) {
+	return s.repository.Subscribing(ctx)
 }

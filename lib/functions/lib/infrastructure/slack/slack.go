@@ -2,10 +2,13 @@ package slackclient
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"notisce/lib/functions/lib/common/log"
 	"notisce/lib/functions/lib/subscribe"
+	"strconv"
 	"strings"
 
 	"github.com/aws/aws-lambda-go/events"
@@ -36,6 +39,43 @@ func New(token, signingSecret string) Client {
 		svc:           slack.New(token, slack.OptionDebug(true)),
 		signingSecret: signingSecret,
 	}
+}
+
+func (c Client) Send(ctx context.Context, event subscribe.Event, subscription subscribe.Subscription) error {
+	attachment := []slack.Attachment{
+		{
+			Fields: attatchmentFields(event),
+		},
+	}
+	_, _, err := c.svc.PostMessageContext(ctx, subscription.ChannelID, slack.MsgOptionAttachments(attachment[:]...))
+	return err
+}
+
+func attatchmentFields(event subscribe.Event) []slack.AttachmentField {
+	res := []slack.AttachmentField{}
+	res = append(res, slack.AttachmentField{
+		Title: "ContractAddress",
+		Value: event.ContractAddress,
+	})
+	res = append(res, slack.AttachmentField{
+		Title: "Event",
+		Value: event.EventName,
+	})
+	res = append(res, slack.AttachmentField{
+		Title: "BlockNumber",
+		Value: strconv.FormatUint(event.BlockNumber, 10),
+	})
+	res = append(res, slack.AttachmentField{
+		Title: "Hash",
+		Value: event.TxHash,
+	})
+	for k, v := range event.Parameters {
+		res = append(res, slack.AttachmentField{
+			Title: k,
+			Value: fmt.Sprintf("%v", v),
+		})
+	}
+	return res
 }
 
 func parseRequest(body string) (slack.SlashCommand, error) {
@@ -123,6 +163,7 @@ func (c Client) ToInputFromBody(body string) (subscribe.Input, error) {
 	options := strings.Split(cm.Text, " ")
 	in := &subscribe.Input{}
 	parseFields(in, options)
+	in.ChannelID = cm.ChannelID
 	in.WebhookURL = cm.ResponseURL
 	return *in, nil
 }

@@ -10,6 +10,7 @@ import { ManagedPolicy, Role, ServicePrincipal } from "@aws-cdk/aws-iam";
 import { LogGroup } from "@aws-cdk/aws-logs";
 import * as cdk from "@aws-cdk/core";
 import { RemovalPolicy } from "@aws-cdk/core";
+import { basicPolicytStatements } from "./restapi";
 
 export class ClusterStack extends cdk.Stack {
   constructor(scope: cdk.App, id: string, props?: cdk.StackProps) {
@@ -53,6 +54,9 @@ export class ClusterStack extends cdk.Stack {
       roleName: "notisce-ecs-service-task-role",
       assumedBy: new ServicePrincipal("ecs-tasks.amazonaws.com"),
     });
+    basicPolicytStatements(this.region, this.account).forEach((s) =>
+      serviceTaskRole.addToPolicy(s)
+    );
     const logGroup = new LogGroup(this, "ServiceLogGroup", {
       logGroupName: "/aws/ecs/notisce-cluster",
       removalPolicy: RemovalPolicy.DESTROY,

@@ -37,7 +37,7 @@ const ddbProps = (tableName: string): TableProps => {
       type: AttributeType.STRING,
     },
     billingMode: BillingMode.PAY_PER_REQUEST,
-    removalPolicy: cdk.RemovalPolicy.RETAIN,
+    removalPolicy: cdk.RemovalPolicy.DESTROY,
     pointInTimeRecovery: true,
   };
 };

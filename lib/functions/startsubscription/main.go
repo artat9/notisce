@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"notisce/lib/functions/lib"
 	slackclient "notisce/lib/functions/lib/infrastructure/slack"
-	"notisce/lib/functions/lib/infrastructure/ssm"
 
 	"notisce/lib/functions/lib/subscribe"
 	repository "notisce/lib/functions/lib/subscribe/persistence"
@@ -19,7 +18,6 @@ const (
 )
 
 func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
-
 	ps, err := lib.NewParameterStore(ctx)
 	if err != nil {
 		return unexpectedError(request, err)
@@ -32,7 +30,7 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 		return unexpectedError(request, err)
 	}
 	app := newApp(ctx, s)
-	res, err := app.Process(ctx, request.Body)
+	res, err := app.Register(ctx, request.Body)
 	if err != nil {
 		return errorResponse(request, res)
 	}
@@ -66,6 +64,6 @@ func main() {
 	lambda.Start(handler)
 }
 
-func newApp(ctx context.Context, slcli slackclient.Client) subscribe.Service {
-	return subscribe.New(ssm.New(), slcli, repository.New())
+func newApp(ctx context.Context, slcli slackclient.Client) subscribe.Registrar {
+	return subscribe.NewRegistrar(slcli, repository.New())
 }
